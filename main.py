@@ -687,6 +687,8 @@ def main():
 
     # Обработчики (ВАЖНО: правильный порядок!)
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("stats", stats))
+    application.add_handler(CommandHandler("export", export_data))
     application.add_handler(MessageHandler(filters.Regex(r"^(Да|Нет)$"), handle_care_question))
     application.add_handler(MessageHandler(filters.Regex(r"^\d{1,2}:\d{2}$"), handle_time))
     application.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL, handle_media_message))
