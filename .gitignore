@@ -1,0 +1,7 @@
+venv/
+user_media/
+__pycache__/
+settings.py
+*.pyc
+.env
+*.log
