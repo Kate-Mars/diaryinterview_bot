@@ -22,6 +22,18 @@ if not TOKEN:
     print("❌ ERROR: TOKEN environment variable is not set!")
     print("Please set the TOKEN variable on Railway")
     exit(1)
+ADMIN_ID = os.environ.get('ADMIN_ID')
+
+if not ADMIN_ID:
+    print("⚠️ WARNING: ADMIN_ID not set, admin commands will be disabled")
+    ADMIN_ID = None
+else:
+    try:
+        ADMIN_ID = int(ADMIN_ID)
+        print(f"✅ Admin ID set to: {ADMIN_ID}")
+    except ValueError:
+        print("❌ ERROR: ADMIN_ID must be a number")
+        ADMIN_ID = None
 BASE_DIR = os.getcwd()
 DATA_FILE = os.path.join(BASE_DIR, "user_data.json")
 MEDIA_DIR = os.path.join(BASE_DIR, "user_media")
@@ -595,6 +607,79 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     schedule_next_day(context, chat_id)
 
+## ADMIN PANEL
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Статистика бота (доступна всем)"""
+    chat_id = update.effective_chat.id
+
+    global USER_DATA
+    USER_DATA = load_data()
+
+    total_users = len(USER_DATA)
+    active_today = 0
+    total_responses = 0
+
+    today = today_date_str()
+    for uid, user_data in USER_DATA.items():
+        if user_data.get("last_response_date") == today:
+            active_today += 1
+        total_responses += len(user_data.get("responses", {}))
+
+    stats_text = f"""
+📊 <b>Статистика бота</b>
+
+👥 Всего пользователей: {total_users}
+✅ Активных сегодня: {active_today}
+💬 Всего ответов: {total_responses}
+
+📅 Данные обновлены: {today}
+"""
+    await update.message.reply_text(stats_text, parse_mode="HTML")
+
+async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Экспорт данных (только для админа)"""
+    if not ADMIN_ID:
+        await update.message.reply_text("❌ Admin commands are disabled")
+        return
+
+    if update.effective_chat.id != ADMIN_ID:
+        await update.message.reply_text("❌ Эта команда только для администратора")
+        return
+
+    global USER_DATA
+    USER_DATA = load_data()
+
+    # Создаем JSON файл для экспорта
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
+        json.dump(USER_DATA, f, ensure_ascii=False, indent=2)
+        temp_path = f.name
+
+    # Отправляем файл
+    with open(temp_path, 'rb') as f:
+        await update.message.reply_document(
+            document=f,
+            filename=f"bot_data_{today_date_str()}.json",
+            caption="Данные бота"
+        )
+
+    # Удаляем временный файл
+    os.unlink(temp_path)
+
+
+async def admin_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Проверка админского доступа"""
+
+    chat_id = update.effective_chat.id
+
+    if not ADMIN_ID:
+        await update.message.reply_text("❌ Admin commands are disabled (ADMIN_ID not set)")
+        return
+
+    if chat_id == ADMIN_ID:
+        await update.message.reply_text(f"✅ Вы администратор! Ваш ID: {chat_id}")
+    else:
+        await update.message.reply_text(f"❌ Вы не администратор. Ваш ID: {chat_id}\nАдмин ID: {ADMIN_ID}")
 
 # --- Main ---
 def main():
