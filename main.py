@@ -1,5 +1,4 @@
 import json
-import os
 import logging
 from datetime import datetime, timedelta, time as dtime
 from zoneinfo import ZoneInfo
@@ -18,6 +17,7 @@ from days import *
 # --- Настройки ---
 import os
 TOKEN = os.environ.get('TOKEN')
+
 if not TOKEN:
     print("❌ ERROR: TOKEN environment variable is not set!")
     print("Please set the TOKEN variable on Railway")
