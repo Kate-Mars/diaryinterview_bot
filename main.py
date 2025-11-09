@@ -13,11 +13,15 @@ from telegram.ext import (
     filters,
 )
 
-from settings import *
 from days import *
 
 # --- Настройки ---
 import os
+TOKEN = os.environ.get('TOKEN')
+if not TOKEN:
+    print("❌ ERROR: TOKEN environment variable is not set!")
+    print("Please set the TOKEN variable on Railway")
+    exit(1)
 BASE_DIR = os.getcwd()
 DATA_FILE = os.path.join(BASE_DIR, "user_data.json")
 MEDIA_DIR = os.path.join(BASE_DIR, "user_media")
