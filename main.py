@@ -649,13 +649,11 @@ async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global USER_DATA
     USER_DATA = load_data()
 
-    # Создаем JSON файл для экспорта
     import tempfile
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
         json.dump(USER_DATA, f, ensure_ascii=False, indent=2)
         temp_path = f.name
 
-    # Отправляем файл
     with open(temp_path, 'rb') as f:
         await update.message.reply_document(
             document=f,
@@ -663,7 +661,6 @@ async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption="Данные бота"
         )
 
-    # Удаляем временный файл
     os.unlink(temp_path)
 
 
@@ -681,6 +678,141 @@ async def admin_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text(f"❌ Вы не администратор. Ваш ID: {chat_id}\nАдмин ID: {ADMIN_ID}")
 
+
+async def get_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получить медиа файлы пользователя (только для админа)"""
+
+    if not ADMIN_ID:
+        await update.message.reply_text("❌ Admin commands are disabled")
+        return
+
+    if update.effective_chat.id != ADMIN_ID:
+        await update.message.reply_text("❌ Эта команда только для администратора")
+        return
+
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Укажите ID пользователя:\n"
+            "Пример: `/get_media 123456789`",
+            parse_mode="Markdown"
+        )
+        return
+
+    try:
+        user_id = context.args[0]
+        user_media_dir = os.path.join(MEDIA_DIR, user_id)
+
+        if not os.path.exists(user_media_dir):
+            await update.message.reply_text(f"❌ Папка пользователя {user_id} не найдена")
+            return
+
+        media_files = []
+        for file in os.listdir(user_media_dir):
+            if file.endswith(('.jpg', '.jpeg', '.png', '.mp4', '.mov')):
+                media_files.append(file)
+
+        if not media_files:
+            await update.message.reply_text(f"❌ У пользователя {user_id} нет медиа файлов")
+            return
+
+        media_files.sort()
+
+        await update.message.reply_text(
+            f"📁 Медиа файлы пользователя {user_id}:\n"
+            f"Всего файлов: {len(media_files)}\n\n"
+            "Отправляю файлы..."
+        )
+
+        sent_count = 0
+        for media_file in media_files[:10]:
+            file_path = os.path.join(user_media_dir, media_file)
+
+            try:
+                if media_file.endswith(('.jpg', '.jpeg', '.png')):
+                    with open(file_path, 'rb') as f:
+                        await update.message.reply_photo(
+                            photo=f,
+                            caption=f"📸 {media_file}\nUser: {user_id}"
+                        )
+                elif media_file.endswith(('.mp4', '.mov')):
+                    with open(file_path, 'rb') as f:
+                        await update.message.reply_video(
+                            video=f,
+                            caption=f"🎥 {media_file}\nUser: {user_id}"
+                        )
+
+                sent_count += 1
+
+                import asyncio
+                await asyncio.sleep(1)
+
+            except Exception as e:
+                logger.error(f"Ошибка отправки файла {media_file}: {e}")
+                await update.message.reply_text(f"❌ Ошибка отправки {media_file}")
+
+        if len(media_files) > 10:
+            await update.message.reply_text(
+                f"📋 Показано первых 10 файлов из {len(media_files)}\n"
+                f"Используйте `/get_media {user_id} 10` для следующих файлов",
+                parse_mode="Markdown"
+            )
+
+    except Exception as e:
+        logger.error(f"Ошибка в get_media: {e}")
+        await update.message.reply_text("❌ Ошибка при получении медиа файлов")
+
+
+async def list_users_with_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Список всех пользователей у которых есть медиа файлы"""
+
+    if not ADMIN_ID:
+        await update.message.reply_text("❌ Admin commands are disabled")
+        return
+
+    if update.effective_chat.id != ADMIN_ID:
+        await update.message.reply_text("❌ Эта команда только для администратора")
+        return
+
+    try:
+        users_with_media = []
+
+        if not os.path.exists(MEDIA_DIR):
+            await update.message.reply_text("❌ Папка user_media не существует")
+            return
+
+        for user_id in os.listdir(MEDIA_DIR):
+            user_dir = os.path.join(MEDIA_DIR, user_id)
+            if os.path.isdir(user_dir):
+                media_files = [f for f in os.listdir(user_dir) if f.endswith(('.jpg', '.jpeg', '.png', '.mp4', '.mov'))]
+                if media_files:
+                    users_with_media.append((user_id, len(media_files)))
+
+        if not users_with_media:
+            await update.message.reply_text("❌ Нет пользователей с медиа файлами")
+            return
+
+        global USER_DATA
+        USER_DATA = load_data()
+
+        message = "👥 <b>Пользователи с медиа файлами:</b>\n\n"
+
+        for user_id, file_count in sorted(users_with_media, key=lambda x: x[1], reverse=True):
+            user_data = USER_DATA.get(user_id, {})
+            user_info = user_data.get("user_info", {})
+            user_name = user_info.get('first_name', 'Unknown')
+            username = user_info.get('username', 'No username')
+
+            message += f"👤 <b>{user_name}</b> (@{username})\n"
+            message += f"   🆔: {user_id}\n"
+            message += f"   📁 Файлов: {file_count}\n"
+            message += f"   📥 Команда: <code>/get_media {user_id}</code>\n\n"
+
+        await update.message.reply_text(message, parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Ошибка в list_users_with_media: {e}")
+        await update.message.reply_text("❌ Ошибка при получении списка пользователей")
+
 # --- Main ---
 def main():
     application = ApplicationBuilder().token(TOKEN).build()
@@ -689,6 +821,8 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("export", export_data))
+    application.add_handler(CommandHandler("get_media", get_media))
+    application.add_handler(CommandHandler("media_users", list_users_with_media))
     application.add_handler(MessageHandler(filters.Regex(r"^(Да|Нет)$"), handle_care_question))
     application.add_handler(MessageHandler(filters.Regex(r"^\d{1,2}:\d{2}$"), handle_time))
     application.add_handler(MessageHandler(filters.PHOTO | filters.VIDEO | filters.Document.ALL, handle_media_message))
